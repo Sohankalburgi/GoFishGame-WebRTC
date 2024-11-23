@@ -2,10 +2,14 @@ import { Socket } from "socket.io";
 
 const mongoose = require('mongoose')
 const bcrypt = require('bcrypt');
-const User = require('./models/UserModel')
+const User = require('./models/UserModel');
+const UserDetail = require('./models/UserDetails')
 const express = require('express');
 const { createServer } = require('node:http');
 const { Server } = require('socket.io');
+
+//function import
+const generateRoom = require('./funtions/RoomIDGenerator')
 
 const app = express();
 const server = createServer(app);
@@ -14,6 +18,7 @@ const io = new Server(server);
 
 
 app.use(express.json());
+
 mongoose
   .connect("mongodb://localhost:27017/GoFish")
   .then(() => {
@@ -38,7 +43,7 @@ app.post('/register',async (req:any,res:any)=>{
   await user.save();
 
   return res.status(200).json({message : "User created"})
-})
+});
 
 
 app.post('/login', async(req:any, res:any)=>{
@@ -53,6 +58,34 @@ app.post('/login', async(req:any, res:any)=>{
     return res.status(400).json({error : "password is wrong"});
   }
   return res.status(200).json({message : "user authenticated"});
+});
+
+
+app.post('/userdetails',async(req : any,res : any)=>{
+  const { userId,name,dateOfBirth } = req.body;
+  
+  const user = await User.findById(userId);
+
+  if(!user){
+    return res.status(404).json({error:"User not found"});
+  }
+
+  const userDetail = new UserDetail({ user, name, dateOfBirth });
+  await userDetail.save();
+  return res.status(200).json({message:"Successful"});
+
+});
+
+app.post('/startGame',(req : any,res : any)=>{
+  // getting the user data
+  const { userId } = req.body;
+  
+  // generating the random roomID
+  const roomId = generateRoom.generateRoom(10);
+
+  // add the user to the websocket room
+
+  return res.send(roomId);
 })
 
 

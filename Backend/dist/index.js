@@ -12,9 +12,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const User = require('./models/UserModel');
+const UserDetail = require('./models/UserDetails');
 const express = require('express');
 const { createServer } = require('node:http');
 const { Server } = require('socket.io');
+//function import
+const generateRoom = require('./funtions/RoomIDGenerator');
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
@@ -49,6 +52,21 @@ app.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () 
     }
     return res.status(200).json({ message: "user authenticated" });
 }));
+app.post('/userdetails', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { userId, name, dateOfBirth } = req.body;
+    const user = yield User.findById(userId);
+    if (!user) {
+        return res.status(404).json({ error: "User not found" });
+    }
+    const userDetail = new UserDetail({ user, name, dateOfBirth });
+    yield userDetail.save();
+    return res.status(200).json({ message: "Successful" });
+}));
+app.post('/startGame', (req, res) => {
+    const { userId } = req.body;
+    const roomId = generateRoom.generateRoom(6);
+    return res.send(roomId);
+});
 io.on('connection', (socket) => {
     console.log('a user connected');
     socket.emit('connected', socket.id);
