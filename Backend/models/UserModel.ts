@@ -1,6 +1,12 @@
-const mongoose = require('mongoose');
 
-const UserSchema = mongoose.Schema({
+import {Schema,model} from "mongoose";
+
+export interface UserRegister {
+    username : string,
+    password : string,
+}
+
+const UserSchema = new Schema<UserRegister>({
     username : {
         type : String,
         require : true
@@ -11,6 +17,6 @@ const UserSchema = mongoose.Schema({
     }
 })
 
-const User = mongoose.model('User',UserSchema);
+const User = model<UserRegister>('User',UserSchema);
 
 module.exports = User;

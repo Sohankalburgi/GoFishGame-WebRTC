@@ -11,11 +11,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-const User = require('./models/UserModel');
-const UserDetail = require('./models/UserDetails');
 const express = require('express');
 const { createServer } = require('node:http');
 const { Server } = require('socket.io');
+//model import 
+const User = require('./models/UserModel');
+const UserDetail = require('./models/UserDetails');
+const RoomModel = require('./models/Room');
 //function import
 const generateRoom = require('./funtions/RoomIDGenerator');
 const app = express();
@@ -58,21 +60,53 @@ app.post('/userdetails', (req, res) => __awaiter(void 0, void 0, void 0, functio
     if (!user) {
         return res.status(404).json({ error: "User not found" });
     }
-    const userDetail = new UserDetail({ user, name, dateOfBirth });
+    const userDetail = new UserDetail({ userId, name, dateOfBirth });
     yield userDetail.save();
     return res.status(200).json({ message: "Successful" });
 }));
-app.post('/startGame', (req, res) => {
+app.post('/startGame', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    // getting the user data
     const { userId } = req.body;
-    const roomId = generateRoom.generateRoom(6);
-    return res.send(roomId);
-});
+    // generating the random roomID
+    const roomId = generateRoom.generateRoom(10);
+    // rooms are generated and stored in the DB
+    const room = new RoomModel({
+        roomId,
+        users: []
+    });
+    yield room.save();
+    return res.status(200).json({ message: roomId });
+}));
 io.on('connection', (socket) => {
     console.log('a user connected');
     socket.emit('connected', socket.id);
-    socket.on('disconnect', () => {
+    // socket when join Room is made, it is given with the roomId
+    socket.on('joinRoom', (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId, userId }) {
+        console.log("join Room is triggerd " + roomId + "and " + userId);
+        const userDetails = yield UserDetail.findOne({ userId });
+        const room = yield RoomModel.findOne({ roomId });
+        if (!room || !userDetails) {
+            console.log('either user or room is not found');
+            return;
+        }
+        console.log(room.users);
+        // saving the socket Id instead of socket
+        room.users.push({
+            userId,
+            socketId: socket.id
+        });
+        // saving the socket id in the room database
+        yield room.save();
+        console.log(`user : ${userId} entered room : ${roomId}`);
+    }));
+    socket.on('disconnect', () => __awaiter(void 0, void 0, void 0, function* () {
         console.log('user disconnected');
-    });
+        const rooms = yield RoomModel.find({ "users.socketId": socket.id });
+        rooms.forEach((room) => __awaiter(void 0, void 0, void 0, function* () {
+            room.users = room.users.filter((x) => x.socketId != socket.id);
+            yield room.save();
+        }));
+    }));
 });
 server.listen(3000, () => {
     console.log('server running at http://localhost:3000');

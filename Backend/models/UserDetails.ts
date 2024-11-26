@@ -1,12 +1,18 @@
-import { SchemaType, SchemaTypes } from "mongoose";
-
-const mongoose = require("mongoose");
+import { Schema,model,SchemaType, SchemaTypes, Types } from "mongoose";
 
 
-const UserDetailsSchema = mongoose.Schema({
+interface UserDetail{
+    userId : Types.ObjectId,
+    name : string,
+    dateOfBirth : Date
+}
+
+
+const UserDetailsSchema = new Schema<UserDetail>({
     userId : {
-        type : SchemaTypes.ObjectId,
-        ref : 'User'
+        type : Schema.Types.ObjectId,
+        ref : 'User',
+        require : true
     },
     name : {
         type : String,
@@ -18,6 +24,6 @@ const UserDetailsSchema = mongoose.Schema({
     }
 })
 
-const UserDetail = new mongoose.model('UserDetail',UserDetailsSchema);
+const UserDetail = model<UserDetail>('UserDetail',UserDetailsSchema);
 
 module.exports = UserDetail;

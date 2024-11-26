@@ -5,7 +5,3 @@ export interface User{
     name : string,
     socket : Socket
 }
-
-export class UserManager{
- 
-}
