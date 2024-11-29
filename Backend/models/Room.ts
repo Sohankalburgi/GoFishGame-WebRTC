@@ -4,6 +4,8 @@ import { User } from "../Manager/User";
 interface Room {
     roomId : string,
     users : User[],
+    playerDeck : any[],
+    numberOfPlayers : Number
 }
 
 const RoomSchema = new Schema<Room>({
@@ -13,6 +15,12 @@ const RoomSchema = new Schema<Room>({
     },
     users : {
         type : [],
+    },
+    playerDeck : {
+        type : [],
+    },
+    numberOfPlayers : {
+        type : Number,
     }
 });
 

@@ -15,6 +15,7 @@ const RoomModel = require('./models/Room');
 
 //function import
 const generateRoom = require('./funtions/RoomIDGenerator')
+const deckFunc = require('./funtions/CardStackShuffler');
 
 const app = express();
 const server = createServer(app);
@@ -83,15 +84,20 @@ app.post('/userdetails',async(req : any,res : any)=>{
 
 app.post('/startGame',async(req : any,res : any)=>{
   // getting the user data
-  const { userId } = req.body;
+  const { userId,numberOfPlayers } = req.body;
   
+  if(numberOfPlayers==0){
+    return res.status(400).json({error : "Players cannot be zero"});
+  }
+
   // generating the random roomID
   const roomId = generateRoom.generateRoom(10);
 
   // rooms are generated and stored in the DB
   const room = new RoomModel({
     roomId,
-    users : []
+    users : [],
+    numberOfPlayers
   })
 
   await room.save();
@@ -112,12 +118,12 @@ io.on('connection', (socket:Socket) => {
   socket.on('joinRoom',async ({roomId, userId})=>{
     
     console.log("join Room is triggerd "+ roomId + "and "+ userId);
-    const userDetails = await UserDetail.findOne({userId});
+    const user = await User.findById(userId);
     
     const room = await RoomModel.findOne({roomId});
 
     
-    if(!room || !userDetails){
+    if(!room || !user){
       console.log('either user or room is not found');
       return;
     }
@@ -130,11 +136,55 @@ io.on('connection', (socket:Socket) => {
       socketId:socket.id
     });
 
-    // saving the socket id in the room database
-    await room.save();
-    console.log(`user : ${userId} entered room : ${roomId}`);
     
-  })
+    // if the users with length is 4 then start the Game.
+    if(room.users.length == room.limit){
+      io.to(roomId).emit("joined");
+      // socket is created with the roomId 
+      socket.join(roomId);
+
+      // saving the socket id in the room database
+      await room.save();
+      console.log(`user : ${userId} entered room : ${roomId}`);
+    }
+    else{
+      // if the players exceed 4 then emit housefull
+      socket.emit("housefull");
+    }
+  });
+  
+  socket.on("startGame",async ({roomId})=>{
+    // getting the room 
+    const room = await RoomModel.findOne({roomId});
+    
+    if(!room){
+      console.log("the room is null")
+      return;
+    }
+
+    // the stack of card is created (shuffled)
+    const mainDeck = await deckFunc.getDeck();
+
+    console.log(mainDeck);
+    // divide the stack/pile of cards to 4 players
+    const playerDeck = [];
+
+    let i = 0;
+    let j = 0;
+
+    while(i < room.numberOfPlayers){
+      playerDeck.push(mainDeck.slice(j,j+5));
+      j+=5;
+      i++;
+    }
+
+    // save the playerDeck in the room model to store the card state of the each player
+    room.playerDeck = playerDeck;
+    await room.save();
+
+    // sending the info to the room players
+    io.to(roomId).emit('startState',room);
+  });
 
   socket.on('disconnect', async () => {
     console.log('user disconnected');
@@ -142,7 +192,8 @@ io.on('connection', (socket:Socket) => {
     rooms.forEach(async (room:any)=>{
       room.users = room.users.filter((x :any)=> x.socketId!=socket.id)
       await room.save();
-    })
+    });
+
   });
 });
 
