@@ -14,10 +14,12 @@ const bcrypt = require('bcrypt');
 const express = require('express');
 const { createServer } = require('node:http');
 const { Server } = require('socket.io');
+
 //model import 
 const User = require('./models/UserModel');
 const UserDetail = require('./models/UserDetails');
 const RoomModel = require('./models/Room');
+
 //function import
 const generateRoom = require('./funtions/RoomIDGenerator');
 const deckFunc = require('./funtions/CardStackShuffler');
@@ -25,12 +27,14 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server);
 app.use(express.json());
+
 mongoose
     .connect("mongodb://localhost:27017/GoFish")
     .then(() => {
     console.log("Mongo DB Connection is Established");
 })
     .catch((error) => console.log(error));
+
 app.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -44,6 +48,7 @@ app.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* 
     yield user.save();
     return res.status(200).json({ message: "User created" });
 }));
+
 app.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
     const user = yield User.findOne({ username });
@@ -55,6 +60,7 @@ app.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () 
     }
     return res.status(200).json({ message: "user authenticated" });
 }));
+
 app.post('/userdetails', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { userId, name, dateOfBirth } = req.body;
     const user = yield User.findById(userId);
@@ -65,6 +71,7 @@ app.post('/userdetails', (req, res) => __awaiter(void 0, void 0, void 0, functio
     yield userDetail.save();
     return res.status(200).json({ message: "Successful" });
 }));
+
 app.post('/startGame', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     // getting the user data
     const { userId, numberOfPlayers } = req.body;
@@ -82,6 +89,7 @@ app.post('/startGame', (req, res) => __awaiter(void 0, void 0, void 0, function*
     yield room.save();
     return res.status(200).json({ message: roomId });
 }));
+
 io.on('connection', (socket) => {
     console.log('a user connected');
     socket.emit('connected', socket.id);
@@ -95,16 +103,22 @@ io.on('connection', (socket) => {
             return;
         }
         console.log(room.users);
-        // saving the socket Id instead of socket
+        // Assign a unique client number based on the number of users in the room
+        const clientNum = room.users.length + 1;
+
         room.users.push({
             userId,
-            socketId: socket.id
+            socketId: socket.id,
+            playerNum : clientNum
         });
         // if the users with length is 4 then start the Game.
-        if (room.users.length == room.limit) {
-            io.to(roomId).emit("joined");
+        if (room.users.length == room.numberOfPlayers ) {
             // socket is created with the roomId 
+            //first client join room and then we send messages to clients in that room
             socket.join(roomId);
+            //sending message to client in room 
+            io.to(roomId).emit(`joined room with id ${roomId}`);
+            
             // saving the socket id in the room database
             yield room.save();
             console.log(`user : ${userId} entered room : ${roomId}`);
@@ -114,6 +128,7 @@ io.on('connection', (socket) => {
             socket.emit("housefull");
         }
     }));
+
     socket.on("startGame", (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId }) {
         // getting the room 
         const room = yield RoomModel.findOne({ roomId });
@@ -122,22 +137,78 @@ io.on('connection', (socket) => {
             return;
         }
         // the stack of card is created (shuffled)
-        const mainDeck = yield deckFunc.getDeck();
+        const mainDeckCards = yield deckFunc.getDeck();
         console.log(mainDeck);
         // divide the stack/pile of cards to 4 players
+        // slice operation only creates an additional sub array but do not modify subarray
+        //so after putting the e;lements into player deck we want to remove those elements from main deck
         const playerDeck = [];
         let i = 0;
         let j = 0;
         while (i < room.numberOfPlayers) {
-            playerDeck.push(mainDeck.slice(j, j + 5));
+            playerCards = mainDeck.splice(j, 5);
+            playerDeck.push(playerCards);
             j += 5;
-            i++;
+            i++; 
         }
         // save the playerDeck in the room model to store the card state of the each player
         room.playerDeck = playerDeck;
+        room.mainDeck = mainDeckCards;
         yield room.save();
         socket.emit('startState', room);
     }));
+    //event -> gamePlay involves the game 
+    //data => contains card selected by the user and the player from whom he/ she want to fish the cards from
+    socket.on('gamePlay', (data) =>{
+        //extract the data
+        // selectPlayer => select the player from whom the cards have to be fished
+        // playerNum => contains the number assigned to current player
+        const { cardName, selectPlayer, playerNum } = data;
+        let currCard = cardName.toUpperCase();
+        if(playerNum == selectPlayer){
+            //here we are sending to client that action cannot be performed
+            socket.emit('actionAcknowledged', {
+                success: false,
+                message: 'you cannot fish the cards from your own deck'
+            });
+            return; // Don't proceed further if the data is invalid
+        }
+        //retrieved the deck of cards of the selected user
+        let selectPlayerDeck = RoomModel.playerDeck[selectPlayer - 1];
+        //find the number of elements in selected deck that 
+        // corresponds to card asked by user
+        let count = selectPlayerDeck.filter(card => card == currCard).length;
+        if(count == 0){
+            //the selected user doesn't have the card the curr player asked for
+            //so retrieve the card from maindeck and put it to selectPlayerDeck
+            if(mainDeck.length > 0){
+                let cardFromMainDeck = mainDeck[mainDeck.length - 1];
+                if(cardFromMainDeck != currCard){
+                    selectPlayerDeck.push(cardFromMainDeck);
+                    mainDeck.pop();
+                }
+                else{
+                    while(cardFromMainDeck == currCard){
+                        selectPlayerDeck.push(cardFromMainDeck);
+                        mainDeck.pop();
+                        if(mainDeck.length > 0){
+                            cardFromMainDeck = mainDeck[mainDeck.length - 1];
+                        } else {
+                            // End the loop if no cards are left in mainDeck
+                            break;
+                        }
+                    }
+                }
+            }
+            else{
+                //if main deck is zero then the game ends that logic 
+                //has to be figured out
+            }
+            
+            
+        }  
+
+    })
     socket.on('disconnect', () => __awaiter(void 0, void 0, void 0, function* () {
         console.log('user disconnected');
         const rooms = yield RoomModel.find({ "users.socketId": socket.id });
