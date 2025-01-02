@@ -124,6 +124,8 @@ app.post('/joinRoom',async(req:any,res:any)=>{
 
 
 
+
+
 io.on('connection', (socket:Socket) => {
   console.log('a user connected');
   

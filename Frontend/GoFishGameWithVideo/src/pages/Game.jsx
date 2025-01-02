@@ -51,7 +51,7 @@ export const Game = () => {
     pc.onicecandidate = (event) => {
       console.log(event.candidate)
       if (event.candidate) {
-        socket.current.emit("onicecandidate", {roomId:"uCNJyexb]S", ice: event.candidate });
+        socket.emit("onicecandidate", {roomId, ice: event.candidate });
       }
     };
 
