@@ -21,7 +21,8 @@ const RoomSchema = new Schema<Room>({
     },
     numberOfPlayers : {
         type : Number,
-    }
+    },
+
 });
 
 const RoomModel = model<Room>('Room',RoomSchema);

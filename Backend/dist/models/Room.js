@@ -14,7 +14,7 @@ const RoomSchema = new mongoose_1.Schema({
     },
     numberOfPlayers: {
         type: Number,
-    }
+    },
 });
 const RoomModel = (0, mongoose_1.model)('Room', RoomSchema);
 module.exports = RoomModel;
