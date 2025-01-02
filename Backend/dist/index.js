@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+const cors = require('cors');
 const express = require('express');
 const { createServer } = require('node:http');
 const { Server } = require('socket.io');
@@ -23,7 +24,12 @@ const generateRoom = require('./funtions/RoomIDGenerator');
 const deckFunc = require('./funtions/CardStackShuffler');
 const app = express();
 const server = createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+    }
+});
+app.use(cors());
 app.use(express.json());
 mongoose
     .connect("mongodb://localhost:27017/GoFish")
@@ -34,26 +40,26 @@ mongoose
 app.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
     if (!username || !password) {
-        return res.status(400).json({ error: "username and password client error" });
+        return res.status(400).json({ success: false, message: "username and password client error" });
     }
     if (yield User.findOne({ username })) {
-        return res.status(400).json({ error: "username already exist" });
+        return res.status(400).json({ success: false, message: "username already exist" });
     }
     const hashedPassword = yield bcrypt.hash(password, 14);
     const user = new User({ username, password: hashedPassword });
     yield user.save();
-    return res.status(200).json({ message: "User created" });
+    return res.status(200).json({ success: true, message: "User created" });
 }));
 app.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
     const user = yield User.findOne({ username });
     if (!user) {
-        return res.status(400).json({ error: "user not found, Please Login" });
+        return res.status(400).json({ success: false, message: "user not found, Please Login" });
     }
     if (!(yield bcrypt.compare(password, user.password))) {
-        return res.status(400).json({ error: "password is wrong" });
+        return res.status(400).json({ success: false, message: "password is wrong" });
     }
-    return res.status(200).json({ message: "user authenticated" });
+    return res.status(200).json({ success: true, message: "user authenticated", token: user._id });
 }));
 app.post('/userdetails', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { userId, name, dateOfBirth } = req.body;
@@ -69,7 +75,7 @@ app.post('/startGame', (req, res) => __awaiter(void 0, void 0, void 0, function*
     // getting the user data
     const { userId, numberOfPlayers } = req.body;
     if (numberOfPlayers == 0) {
-        return res.status(400).json({ error: "Players cannot be zero" });
+        return res.status(400).json({ success: false, message: "Players cannot be zero" });
     }
     // generating the random roomID
     const roomId = generateRoom.generateRoom(10);
@@ -80,7 +86,17 @@ app.post('/startGame', (req, res) => __awaiter(void 0, void 0, void 0, function*
         numberOfPlayers
     });
     yield room.save();
-    return res.status(200).json({ message: roomId });
+    return res.status(200).json({ success: true, message: roomId });
+}));
+app.post('/joinRoom', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { roomId } = req.body;
+    const room = yield RoomModel.findOne({ roomId });
+    if (!room) {
+        return res.status(400).json({ success: false, message: "Room not found" });
+    }
+    else {
+        return res.status(200).json({ success: true, message: "Room found entering to room" });
+    }
 }));
 io.on('connection', (socket) => {
     console.log('a user connected');
@@ -88,7 +104,7 @@ io.on('connection', (socket) => {
     // socket when join Room is made, it is given with the roomId
     socket.on('joinRoom', (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId, userId }) {
         console.log("join Room is triggerd " + roomId + "and " + userId);
-        const user = yield User.findById(userId);
+        const user = yield User.findById({ _id: userId });
         const room = yield RoomModel.findOne({ roomId });
         if (!room || !user) {
             console.log('either user or room is not found');
@@ -100,8 +116,9 @@ io.on('connection', (socket) => {
             userId,
             socketId: socket.id
         });
+        console.log("**********", room.users.length, room.numberOfPlayers);
         // if the users with length is 4 then start the Game.
-        if (room.users.length == room.limit) {
+        if (room.users.length <= room.numberOfPlayers) {
             io.to(roomId).emit("joined");
             // socket is created with the roomId 
             socket.join(roomId);
@@ -191,7 +208,12 @@ io.on('connection', (socket) => {
                 console.log("Main deck is empty, game logic for ending required.");
             }
         }
+
     }));
+    socket.on('onicecandidate', (data) => {
+        console.log(data);
+        io.to(data.roomId).emit('onicecandidate', data);
+    });
     socket.on('disconnect', () => __awaiter(void 0, void 0, void 0, function* () {
         console.log('user disconnected');
         const rooms = yield RoomModel.find({ "users.socketId": socket.id });
