@@ -12,6 +12,9 @@ const RoomSchema = new mongoose_1.Schema({
     playerDeck: {
         type: [],
     },
+    mainDeck: {
+        type: [],
+    },
     numberOfPlayers: {
         type: Number,
     }
