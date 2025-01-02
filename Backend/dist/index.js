@@ -156,6 +156,60 @@ io.on('connection', (socket) => {
         // sending the info to the room players
         io.to(roomId).emit('startState', room);
     }));
+    socket.on("gamePlay", (data) => __awaiter(void 0, void 0, void 0, function* () {
+        const { cardName, selectPlayer, playerNum, roomId } = data;
+        const currCard = cardName.toUpperCase();
+        if (playerNum === selectPlayer) {
+            // Inform the client that the action is invalid
+            socket.emit("actionAcknowledged", {
+                success: false,
+                message: "You cannot fish the cards from your own deck",
+            });
+            return; // Stop processing furtherroom
+        }
+        // Retrieve the room and validate
+        const room = yield RoomModel.findOne({ roomId });
+        if (!room) {
+            console.error("Room not found");
+            return;
+        }
+        // Retrieve the selected player's deck
+        const selectPlayerDeck = room.playerDeck[selectPlayer - 1];
+        const count = selectPlayerDeck.filter((card) => card === currCard).length;
+        if (count === 0) {
+            // If the selected player doesn't have the card, use the main deck
+            if (room.mainDeck.length > 0) {
+                let cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
+                if (cardFromMainDeck !== currCard) {
+                    selectPlayerDeck.push(cardFromMainDeck);
+                    room.mainDeck.pop(); // Remove the card from the main deck
+                    room.playerDeck[selectPlayer - 1] = selectPlayerDeck;
+                    // Save the room state
+                    yield room.save();
+                }
+                else {
+                    while (cardFromMainDeck === currCard) {
+                        selectPlayerDeck.push(cardFromMainDeck);
+                        room.mainDeck.pop();
+                        if (room.mainDeck.length > 0) {
+                            cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
+                        }
+                        else {
+                            break; // Exit the loop if no cards are left in the main deck
+                        }
+                    }
+                    room.playerDeck[selectPlayer - 1] = selectPlayerDeck;
+                    // Save the room state
+                    yield room.save();
+                }
+            }
+            else {
+                // Handle the case where the main deck is empty
+                console.log("Main deck is empty, game logic for ending required.");
+            }
+        }
+
+    }));
     socket.on('onicecandidate', (data) => {
         console.log(data);
         io.to(data.roomId).emit('onicecandidate', data);
