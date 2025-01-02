@@ -5,7 +5,9 @@ interface Room {
     roomId : string,
     users : User[],
     playerDeck : any[],
-    numberOfPlayers : Number
+
+    mainDeck : any[],
+    numberOfPlayers : number
 }
 
 const RoomSchema = new Schema<Room>({
@@ -19,9 +21,12 @@ const RoomSchema = new Schema<Room>({
     playerDeck : {
         type : [],
     },
+    mainDeck : {
+        type : [],
+    },
     numberOfPlayers : {
         type : Number,
-    }
+    },
 });
 
 const RoomModel = model<Room>('Room',RoomSchema);

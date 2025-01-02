@@ -10,7 +10,7 @@ interface GamePlayData {
 
 const mongoose = require('mongoose')
 const bcrypt = require('bcrypt');
-
+const cors = require('cors')
 const express = require('express');
 const { createServer } = require('node:http');
 const { Server } = require('socket.io');
@@ -27,9 +27,13 @@ const deckFunc = require('./funtions/CardStackShuffler');
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server);
+const io = new Server(server,{
+  cors: {
+    origin: "*",
+  }
+});
 
-
+app.use(cors());
 
 app.use(express.json());
 
@@ -44,11 +48,11 @@ app.post('/register',async (req:any,res:any)=>{
   const {username, password} = req.body;
 
   if(!username || !password){
-    return res.status(400).json({ error: "username and password client error" });
+    return res.status(400).json({success:false, message: "username and password client error" });
   }
 
   if(await  User.findOne({username})){
-    return res.status(400).json({ error: "username already exist" });
+    return res.status(400).json({success:false, message: "username already exist" });
   }
 
   const hashedPassword:string =  await bcrypt.hash(password,14);
@@ -56,22 +60,22 @@ app.post('/register',async (req:any,res:any)=>{
   const user = new User({username,password :hashedPassword});
   await user.save();
 
-  return res.status(200).json({message : "User created"})
+  return res.status(200).json({success:true,message : "User created"})
 });
 
 
 app.post('/login', async(req:any, res:any)=>{
   const {username,password} = req.body;
-
+  
   const user = await User.findOne({username});
   if(!user){
-    return res.status(400).json({error:"user not found, Please Login"});
+    return res.status(400).json({success:false,message:"user not found, Please Login"});
   }
 
   if(!await bcrypt.compare(password,user.password)){
-    return res.status(400).json({error : "password is wrong"});
+    return res.status(400).json({success:false,message : "password is wrong"});
   }
-  return res.status(200).json({message : "user authenticated"});
+  return res.status(200).json({ success:true,message : "user authenticated", token : user._id});
 });
 
 
@@ -95,7 +99,7 @@ app.post('/startGame',async(req : any,res : any)=>{
   const { userId,numberOfPlayers } = req.body;
   
   if(numberOfPlayers==0){
-    return res.status(400).json({error : "Players cannot be zero"});
+    return res.status(400).json({success:false,message : "Players cannot be zero"});
   }
 
   // generating the random roomID
@@ -110,9 +114,21 @@ app.post('/startGame',async(req : any,res : any)=>{
 
   await room.save();
 
-  return res.status(200).json({message : roomId});
+  return res.status(200).json({success:true,message : roomId});
 
 })
+
+app.post('/joinRoom',async(req:any,res:any)=>{
+  const {roomId} = req.body;
+
+  const room = await RoomModel.findOne({roomId}); 
+  if(!room){
+    return res.status(400).json({success:false,message:"Room not found"});
+  }
+  else{
+    return res.status(200).json({success:true,message:"Room found entering to room"});
+  }
+});
 
 
 
@@ -126,7 +142,7 @@ io.on('connection', (socket:Socket) => {
   socket.on('joinRoom',async ({roomId, userId})=>{
     
     console.log("join Room is triggerd "+ roomId + "and "+ userId);
-    const user = await User.findById(userId);
+    const user = await User.findById({_id:userId});
     
     const room = await RoomModel.findOne({roomId});
 
@@ -144,9 +160,9 @@ io.on('connection', (socket:Socket) => {
       socketId:socket.id
     });
 
-    
+    console.log("**********",room.users.length, room.numberOfPlayers)
     // if the users with length is 4 then start the Game.
-    if(room.users.length == room.limit){
+    if(room.users.length <= room.numberOfPlayers){
       io.to(roomId).emit("joined");
       // socket is created with the roomId 
       socket.join(roomId);
@@ -193,6 +209,13 @@ io.on('connection', (socket:Socket) => {
     // sending the info to the room players
     io.to(roomId).emit('startState',room);
   });
+
+
+  socket.on('onicecandidate',(data:any)=>{
+    console.log(data);
+    io.to(data.roomId).emit('onicecandidate',data);
+  })
+  
 
 
 socket.on("gamePlay", async (data: GamePlayData) => {
