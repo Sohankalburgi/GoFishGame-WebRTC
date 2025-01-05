@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import toast, { Toaster } from 'react-hot-toast';
 import "../Components/Login.css";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { useForm } from "react-hook-form";
 
 export const JoinGame = () => {
-
+    const {userid} = useParams();
     const [userId, setUserId] = useState("");
 
     const [roomId, setRoomId] = useState("");
@@ -13,8 +13,7 @@ export const JoinGame = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const id = localStorage.getItem('token');
-        setUserId(id);
+        setUserId(userid);
     }, []);
 
     const {
@@ -37,7 +36,8 @@ export const JoinGame = () => {
             console.log(result);
             if (result.success === true) {
                 toast.success(result.message);
-                navigate(`/game/${data.roomId}`);
+                
+                navigate(`/game/${data.roomId}/${userid}`);
             }
             else {
                 toast.error(result.message);

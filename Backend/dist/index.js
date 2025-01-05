@@ -32,7 +32,7 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 mongoose
-    .connect("mongodb://localhost:27017/GoFish")
+    .connect("mongodb+srv://sohankalburgi2:pkKkkqnvo0I4MxQh@cluster0.bppet.mongodb.net/GoFish")
     .then(() => {
     console.log("Mongo DB Connection is Established");
 })
@@ -119,12 +119,13 @@ io.on('connection', (socket) => {
         console.log("**********", room.users.length, room.numberOfPlayers);
         // if the users with length is 4 then start the Game.
         if (room.users.length <= room.numberOfPlayers) {
-            io.to(roomId).emit("joined");
             // socket is created with the roomId 
             socket.join(roomId);
             // saving the socket id in the room database
             yield room.save();
             console.log(`user : ${userId} entered room : ${roomId}`);
+            socket.emit("joined", userId);
+            socket.broadcast.to(roomId).emit("user-joined", userId);
         }
         else {
             // if the players exceed 4 then emit housefull
@@ -155,6 +156,14 @@ io.on('connection', (socket) => {
         yield room.save();
         // sending the info to the room players
         io.to(roomId).emit('startState', room);
+    }));
+    socket.on("add-ice-candidate", (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId, targetUserId, candidate }) {
+        var _b;
+        const room = yield RoomModel.findOne({ roomId });
+        const targetSocket = (_b = room.users.find((user) => user.userId === targetUserId)) === null || _b === void 0 ? void 0 : _b.socketId;
+        if (targetSocket) {
+            io.to(targetSocket).emit("add-ice-candidate", targetUserId, candidate);
+        }
     }));
     socket.on("gamePlay", (data) => __awaiter(void 0, void 0, void 0, function* () {
         const { cardName, selectPlayer, playerNum, roomId } = data;
@@ -195,6 +204,7 @@ io.on('connection', (socket) => {
                             cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
                         }
                         else {
+                            socket.to(room).emit("Game ended wait for results");
                             break; // Exit the loop if no cards are left in the main deck
                         }
                     }
@@ -205,15 +215,33 @@ io.on('connection', (socket) => {
             }
             else {
                 // Handle the case where the main deck is empty
+                socket.to(room).emit("Game ended wait for results");
                 console.log("Main deck is empty, game logic for ending required.");
             }
         }
-
     }));
-    socket.on('onicecandidate', (data) => {
-        console.log(data);
-        io.to(data.roomId).emit('onicecandidate', data);
-    });
+    socket.on('send-offer', (data) => __awaiter(void 0, void 0, void 0, function* () {
+        const { roomId, offer, userId, CurrentSocketId } = data;
+        const room = yield RoomModel.findOne({ roomId });
+        console.log("/sendoffer*************", userId, roomId, offer, CurrentSocketId);
+        const users = room.users.filter((user) => {
+            return user.socketId !== CurrentSocketId;
+        });
+        console.log("the users in the send offer", users);
+        console.log('offer in the backend', offer, roomId, userId, CurrentSocketId);
+        users.forEach((user) => {
+            io.to(user.socketId).emit("offer", offer, userId, CurrentSocketId);
+        });
+    }));
+    socket.on('answer', (data) => __awaiter(void 0, void 0, void 0, function* () {
+        const { roomId, answer, userId, CurrentSocketId } = data;
+        const room = yield RoomModel.findOne({ roomId });
+        const users = room.users.filter((user) => {
+            return user.userId !== userId;
+        });
+        console.log('answer in the backend', answer, roomId, userId);
+        socket.to(CurrentSocketId).emit("answer", answer, userId);
+    }));
     socket.on('disconnect', () => __awaiter(void 0, void 0, void 0, function* () {
         console.log('user disconnected');
         const rooms = yield RoomModel.find({ "users.socketId": socket.id });

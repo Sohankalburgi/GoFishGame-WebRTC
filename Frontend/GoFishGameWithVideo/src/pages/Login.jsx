@@ -1,4 +1,4 @@
-import React from "react";
+
 import toast, { Toaster } from 'react-hot-toast';
 import '../Components/Login.css'
 import { useForm } from "react-hook-form";
@@ -29,8 +29,7 @@ export const Login = () => {
             console.log(result);
             if (result.success == true) {
                 toast.success(result.message);
-                localStorage.setItem('token', result.token);
-                navigate('/startGame')
+                navigate(`/joingame/${result.token}`)
             }
             else if (result.success === false) {
                 toast.error(result.message);

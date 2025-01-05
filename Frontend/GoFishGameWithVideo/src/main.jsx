@@ -13,8 +13,8 @@ createRoot(document.getElementById('root')).render(
   <BrowserRouter>
   <Routes>
     <Route path='/' element={<App/>}/>
-    <Route path='/game/:roomId' element={<Game/>}/>
-    <Route path='/joingame' element={<JoinGame/>}/>
+    <Route path='/game/:roomId/:userId' element={<Game/>}/>
+    <Route path='/joingame/:userid' element={<JoinGame/>}/>
     <Route path='/login' element={<Login/>}/>
     <Route path='/signup' element={<SignUp/>}/>
     <Route path= '/startGame' element={<StartGame/>}/>
