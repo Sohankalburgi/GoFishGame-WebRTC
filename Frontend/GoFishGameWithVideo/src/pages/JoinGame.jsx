@@ -37,7 +37,7 @@ export const JoinGame = () => {
             if (result.success === true) {
                 toast.success(result.message);
                 
-                navigate(`/game/${data.roomId}/${userid}`);
+                navigate(`/gameroom/${data.roomId}/${userid}`);
             }
             else {
                 toast.error(result.message);

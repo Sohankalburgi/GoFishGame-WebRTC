@@ -218,12 +218,11 @@ io.on('connection', (socket: Socket) => {
   });
 
 
-  socket.on("add-ice-candidate", async({ roomId, targetUserId, candidate }) => {
+  socket.on("add-ice-candidate", async({ roomId, type, candidate }) => {
     const room = await RoomModel.findOne({roomId});
-    const targetSocket = room.users.find((user:any) => user.userId === targetUserId)?.socketId;
-    if (targetSocket) {
-      io.to(targetSocket).emit("add-ice-candidate",targetUserId, candidate);
-    }
+    const senderSocketid = socket.id;
+    const receivingUser = room.users.find((user:any)=>  user.socketId !== senderSocketid);
+    io.to(receivingUser.socketId).emit('add-ice-candidate',({candidate,type}));
   });
   
 
@@ -291,29 +290,23 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  socket.on('send-offer', async (data: any) => {
-    const { roomId, offer, userId,CurrentSocketId } = data;
+  socket.on('offer', async (data: any) => {
+    const { roomId, offer } = data;
     const room = await RoomModel.findOne({ roomId });
-    console.log("/sendoffer*************",userId,roomId,offer,CurrentSocketId);
-
-    const users = room.users.filter((user: any) => {
-      return user.socketId !== CurrentSocketId
-    });
-    console.log("the users in the send offer", users);
-    console.log('offer in the backend', offer, roomId, userId,CurrentSocketId);
-    users.forEach((user: any) => {
-      io.to(user.socketId).emit("offer", offer, userId,CurrentSocketId);
-    })
+    const user = room.users.find((userAgent:any)=> userAgent.socketId !== socket.id);
+    io.to(user.socketId).emit('offer',{offer,roomId});
   })
 
   socket.on('answer', async (data: any) => {
-    const { roomId, answer, userId,CurrentSocketId } = data;
+    const { roomId, answer} = data;
     const room = await RoomModel.findOne({ roomId });
-    const users = room.users.filter((user: any) => {
-      return user.userId !== userId
+    const currentSocketId = socket.id;
+    const user = room.users.find((userAgent:any)=>{
+      return userAgent.socketId !== currentSocketId;
     });
-    console.log('answer in the backend', answer, roomId, userId);
-    socket.to(CurrentSocketId).emit("answer",answer,userId);
+
+    
+    io.to(user.socketId).emit("answer",{answer,roomId});
   });
 
 

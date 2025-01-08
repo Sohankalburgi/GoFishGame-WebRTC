@@ -157,13 +157,11 @@ io.on('connection', (socket) => {
         // sending the info to the room players
         io.to(roomId).emit('startState', room);
     }));
-    socket.on("add-ice-candidate", (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId, targetUserId, candidate }) {
-        var _b;
+    socket.on("add-ice-candidate", (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId, type, candidate }) {
         const room = yield RoomModel.findOne({ roomId });
-        const targetSocket = (_b = room.users.find((user) => user.userId === targetUserId)) === null || _b === void 0 ? void 0 : _b.socketId;
-        if (targetSocket) {
-            io.to(targetSocket).emit("add-ice-candidate", targetUserId, candidate);
-        }
+        const senderSocketid = socket.id;
+        const receivingUser = room.users.find((user) => user.socketId !== senderSocketid);
+        io.to(receivingUser.socketId).emit('add-ice-candidate', ({ candidate, type }));
     }));
     socket.on("gamePlay", (data) => __awaiter(void 0, void 0, void 0, function* () {
         const { cardName, selectPlayer, playerNum, roomId } = data;
@@ -220,27 +218,20 @@ io.on('connection', (socket) => {
             }
         }
     }));
-    socket.on('send-offer', (data) => __awaiter(void 0, void 0, void 0, function* () {
-        const { roomId, offer, userId, CurrentSocketId } = data;
+    socket.on('offer', (data) => __awaiter(void 0, void 0, void 0, function* () {
+        const { roomId, offer } = data;
         const room = yield RoomModel.findOne({ roomId });
-        console.log("/sendoffer*************", userId, roomId, offer, CurrentSocketId);
-        const users = room.users.filter((user) => {
-            return user.socketId !== CurrentSocketId;
-        });
-        console.log("the users in the send offer", users);
-        console.log('offer in the backend', offer, roomId, userId, CurrentSocketId);
-        users.forEach((user) => {
-            io.to(user.socketId).emit("offer", offer, userId, CurrentSocketId);
-        });
+        const user = room.users.find((userAgent) => userAgent.socketId !== socket.id);
+        io.to(user.socketId).emit('offer', { offer, roomId });
     }));
     socket.on('answer', (data) => __awaiter(void 0, void 0, void 0, function* () {
-        const { roomId, answer, userId, CurrentSocketId } = data;
+        const { roomId, answer } = data;
         const room = yield RoomModel.findOne({ roomId });
-        const users = room.users.filter((user) => {
-            return user.userId !== userId;
+        const currentSocketId = socket.id;
+        const user = room.users.find((userAgent) => {
+            return userAgent.socketId !== currentSocketId;
         });
-        console.log('answer in the backend', answer, roomId, userId);
-        socket.to(CurrentSocketId).emit("answer", answer, userId);
+        io.to(user.socketId).emit("answer", { answer, roomId });
     }));
     socket.on('disconnect', () => __awaiter(void 0, void 0, void 0, function* () {
         console.log('user disconnected');
