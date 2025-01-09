@@ -155,7 +155,9 @@ io.on('connection', (socket) => {
         room.playerDeck = playerDeck;
         yield room.save();
         // sending the info to the room players
-        io.to(roomId).emit('startState', room);
+        room.users.forEach((user) => {
+            io.to(user.socketId).emit('StartState', { room });
+        });
     }));
     socket.on("add-ice-candidate", (_a) => __awaiter(void 0, [_a], void 0, function* ({ roomId, type, candidate }) {
         const room = yield RoomModel.findOne({ roomId });

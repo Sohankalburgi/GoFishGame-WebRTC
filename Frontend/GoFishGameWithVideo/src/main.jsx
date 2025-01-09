@@ -9,7 +9,7 @@ import { SignUp } from './pages/Signup.jsx'
 import { StartGame } from './pages/StartGame.jsx'
 import { JoinGame } from './pages/JoinGame.jsx'
 import GameRoom from './pages/GameRoom.jsx'
-import GamePage from './pages/GamePage.jsx'
+import GamePage from './pages/Card.jsx'
 
 
 createRoot(document.getElementById('root')).render(
@@ -23,7 +23,7 @@ createRoot(document.getElementById('root')).render(
         <Route path='/signup' element={<SignUp />} />
         <Route path='/startGame' element={<StartGame />} />
         <Route path='/gameroom/:roomId/:userId' element={<GameRoom />} />
-        <Route path='/gamepage/:roomId/:userId' element={<GamePage />} />
+        <Route path='/gamepage' element={<GamePage />} />
       </Routes>
 
   </BrowserRouter>

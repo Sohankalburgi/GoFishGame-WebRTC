@@ -214,7 +214,9 @@ io.on('connection', (socket: Socket) => {
     await room.save();
 
     // sending the info to the room players
-    io.to(roomId).emit('startState', room);
+    room.users.forEach((user:any)=>{
+      io.to(user.socketId).emit('StartState',{room});
+    })
   });
 
 
