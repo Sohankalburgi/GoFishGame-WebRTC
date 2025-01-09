@@ -9,6 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+let player = 0;
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
@@ -111,10 +112,14 @@ io.on('connection', (socket) => {
             return;
         }
         console.log(room.users);
+        if (room.users.length == 0) {
+            player = 0;
+        }
         // saving the socket Id instead of socket
         room.users.push({
             userId,
-            socketId: socket.id
+            socketId: socket.id,
+            playerNum: ++player
         });
         console.log("**********", room.users.length, room.numberOfPlayers);
         // if the users with length is 4 then start the Game.
@@ -151,8 +156,12 @@ io.on('connection', (socket) => {
             j += 5;
             i++;
         }
+        //remove first 10 elements from main Deck
+        mainDeck.splice(0, room.numberOfPlayers * 5);
         // save the playerDeck in the room model to store the card state of the each player
         room.playerDeck = playerDeck;
+        room.mainDeck = mainDeck;
+        console.log(mainDeck);
         yield room.save();
         // sending the info to the room players
         room.users.forEach((user) => {
@@ -166,21 +175,37 @@ io.on('connection', (socket) => {
         io.to(receivingUser.socketId).emit('add-ice-candidate', ({ candidate, type }));
     }));
     socket.on("gamePlay", (data) => __awaiter(void 0, void 0, void 0, function* () {
-        const { cardName, selectPlayer, playerNum, roomId } = data;
+        const { cardName, selectPlayer, roomId, userId } = data;
         const currCard = cardName.toUpperCase();
-        if (playerNum === selectPlayer) {
+        // Retrieve the room and validate
+        const room = yield RoomModel.findOne({ roomId });
+        if (!room) {
+            console.error("Room not found");
+            return;
+        }
+        //get the user based on socjet id
+        const user = room.users.find((users) => users.userId === userId);
+        let playerNumber;
+        if (user) {
+            playerNumber = user.playerNum;
+        }
+        else {
+            console.log("the mentioned user do not exist in the room");
+        }
+        if (playerNumber === selectPlayer) {
             // Inform the client that the action is invalid
+            console.log("You cannot fish cards from your own deck");
             socket.emit("actionAcknowledged", {
                 success: false,
                 message: "You cannot fish the cards from your own deck",
             });
             return; // Stop processing furtherroom
         }
-        // Retrieve the room and validate
-        const room = yield RoomModel.findOne({ roomId });
-        if (!room) {
-            console.error("Room not found");
-            return;
+        console.log("The player currently active is: ", playerNumber);
+        //A player cannot ask for a card if he doesnt have it
+        const currPlayerDeck = room.playerDeck[playerNumber - 1];
+        if (!(currPlayerDeck.includes(currCard))) {
+            console.log("you cannot ask for cards which you dont have");
         }
         // Retrieve the selected player's deck
         const selectPlayerDeck = room.playerDeck[selectPlayer - 1];
