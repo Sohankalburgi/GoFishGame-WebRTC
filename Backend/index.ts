@@ -3,10 +3,18 @@ import { Socket } from "socket.io";
 //interface
 interface GamePlayData {
   cardName: string;
-  selectPlayer: number;
-  playerNum: number;
   roomId: number;
+  userId: string;
 }
+
+interface userSchema {
+  userId: string;
+  socketId: string;
+  playerNum: number;
+}
+
+
+let player = 0;
 
 const mongoose = require('mongoose')
 const bcrypt = require('bcrypt');
@@ -42,7 +50,7 @@ mongoose
   .then(() => {
     console.log("Mongo DB Connection is Established");
   })
-  .catch((error:any) => console.log(error));
+  .catch((error: any) => console.log(error));
 
 app.post('/register', async (req: any, res: any) => {
   const { username, password } = req.body;
@@ -156,11 +164,13 @@ io.on('connection', (socket: Socket) => {
 
     console.log(room.users)
 
+
     // saving the socket Id instead of socket
     room.users.push({
       userId,
-      socketId: socket.id
+      socketId: socket.id,
     });
+
 
     console.log("**********", room.users.length, room.numberOfPlayers)
     // if the users with length is 4 then start the Game.
@@ -169,23 +179,23 @@ io.on('connection', (socket: Socket) => {
       // socket is created with the roomId 
       socket.join(roomId);
 
-      
-
       // saving the socket id in the room database
       await room.save();
       console.log(`user : ${userId} entered room : ${roomId}`);
-      socket.emit("joined",userId);
-      socket.broadcast.to(roomId).emit("user-joined",userId);
+      socket.emit("joined", userId);
+      socket.broadcast.to(roomId).emit("user-joined", userId);
     }
     else {
       // if the players exceed 4 then emit housefull
       socket.emit("housefull");
     }
-    
+
   });
 
-  socket.on("startGame", async ({ roomId }) => {
+  socket.on("startGame", async ({ roomId, userId }) => {
     // getting the room 
+
+    console.log("the start Game is triggered with room", roomId);
     const room = await RoomModel.findOne({ roomId });
 
     if (!room) {
@@ -198,117 +208,333 @@ io.on('connection', (socket: Socket) => {
 
     console.log(mainDeck);
     // divide the stack/pile of cards to 4 players
-    const playerDeck = [];
+    const playerDeckArray = [];
 
     let i = 0;
     let j = 0;
 
     while (i < room.numberOfPlayers) {
-      playerDeck.push(mainDeck.slice(j, j + 5));
+      playerDeckArray.push(mainDeck.slice(j, j + 5));
       j += 5;
       i++;
     }
 
+    i = 0;
+    while (i < room.numberOfPlayers) {
+      room.playerDeck.push(
+        { userId: room.users[i].userId, deck: playerDeckArray[i] });
+      i++;
+    }
+    //remove first 10 elements from main Deck
+    mainDeck.splice(0, room.numberOfPlayers * 5);
+
+
     // save the playerDeck in the room model to store the card state of the each player
-    room.playerDeck = playerDeck;
+
+    room.mainDeck = mainDeck;
+    room.currentUser = userId;
+
+    const setArray:any = [];
+    room.users.forEach((user:any)=>{
+      setArray.push({
+        userId:user.userId,
+        count : 0
+      })
+    })
+    console.log("playerDeck", room.playerDeck)
+    console.log(mainDeck);
+    room.set = setArray;
     await room.save();
 
+
     // sending the info to the room players
-    room.users.forEach((user:any)=>{
-      io.to(user.socketId).emit('StartState',{room});
+    room.users.forEach((user: any) => {
+      io.to(user.socketId).emit('StartState', { room });
     })
   });
 
 
-  socket.on("add-ice-candidate", async({ roomId, type, candidate }) => {
-    const room = await RoomModel.findOne({roomId});
-    const senderSocketid = socket.id;
-    const receivingUser = room.users.find((user:any)=>  user.socketId !== senderSocketid);
-    io.to(receivingUser.socketId).emit('add-ice-candidate',({candidate,type}));
-  });
-  
-
-
-
-  socket.on("gamePlay", async (data: GamePlayData) => {
-    const { cardName, selectPlayer, playerNum, roomId } = data;
-    const currCard = cardName.toUpperCase();
-
-    if (playerNum === selectPlayer) {
-      // Inform the client that the action is invalid
-      socket.emit("actionAcknowledged", {
-        success: false,
-        message: "You cannot fish the cards from your own deck",
-      });
-      return; // Stop processing furtherroom
-    }
-
-    // Retrieve the room and validate
+  socket.on("add-ice-candidate", async ({ roomId, type, candidate }) => {
     const room = await RoomModel.findOne({ roomId });
+    const senderSocketid = socket.id;
+    const receivingUser = room.users.find((user: any) => user.socketId !== senderSocketid);
+    io.to(receivingUser.socketId).emit('add-ice-candidate', ({ candidate, type }));
+  });
+
+  // write the gameplay logic below to this ask
+  socket.on('ask', async (data: GamePlayData) => {
+    const { cardName, roomId, userId } = data;
+
+    const room = await RoomModel.findOne({ roomId });
+
     if (!room) {
       console.error("Room not found");
       return;
     }
 
-    // Retrieve the selected player's deck
-    const selectPlayerDeck = room.playerDeck[selectPlayer - 1] as string[];
-    const count = selectPlayerDeck.filter((card) => card === currCard).length;
+    const ReceiverUser = room.users.find((user:any)=> user.userId !== userId);
 
-    if (count === 0) {
-      // If the selected player doesn't have the card, use the main deck
-      if (room.mainDeck.length > 0) {
-        let cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
+    const ReceiverDeck = room.playerDeck.find((deck:any)=> deck.userId === ReceiverUser.userId).deck;
 
-        if (cardFromMainDeck !== currCard) {
-          selectPlayerDeck.push(cardFromMainDeck);
-          room.mainDeck.pop(); // Remove the card from the main deck
-          room.playerDeck[selectPlayer - 1] = selectPlayerDeck;
+    const countCard = ReceiverDeck.filter((card:string)=> card.charAt(1) === cardName.charAt(1)).length;
 
-          // Save the room state
-          await room.save();
-        } else {
-          while (cardFromMainDeck === currCard) {
-            selectPlayerDeck.push(cardFromMainDeck);
-            room.mainDeck.pop();
+    room.askUser = ReceiverUser.userId;
 
-            if (room.mainDeck.length > 0) {
-              cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
-            } else {
-              socket.to(room).emit("Game ended wait for results");
-              break; // Exit the loop if no cards are left in the main deck
-            }
-          }
+    await room.save();
 
-          room.playerDeck[selectPlayer - 1] = selectPlayerDeck;
-
-          // Save the room state
-          await room.save();
-        }
-      } else {
-        // Handle the case where the main deck is empty
-        socket.to(room).emit("Game ended wait for results");
-        console.log("Main deck is empty, game logic for ending required.");
-      }
+    if(countCard===0){
+      io.to(ReceiverUser.socketId).emit('card-not-present',{cardName,room});
     }
+    else if(countCard>0){
+      io.to(ReceiverUser.socketId).emit('card-present',{cardName,room});
+    }
+
+    // emit if there is card exist => card-present
+    // else emit => card-not-present
+    // change the currentUser to the nextUser
+    // change the askUser to the nextUser from null
   });
+
+  socket.on('fish',async(data:any)=>{
+    const {roomId,cardName,userId} = data;
+    const room = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      console.error("Room not found");
+      return;
+    }
+
+    const ReceiverUser = room.users.find((user:any)=> user.userId !== userId);
+    room.askUser = null;
+
+    await room.save();
+
+    io.to(ReceiverUser.socketId).emit('fish',{room,cardName});
+  })
+
+  socket.on('save-draw-card',async(data:any)=>{
+    const {roomId,userId} = data;
+    const room = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      console.error("Room not found");
+      return;
+    }
+
+    const nextUser = room.users.find((user:any)=> user.userId !== userId);
+    const currentUser = room.users.find((user:any)=> user.userId === userId);
+  
+    const popCard = room.mainDeck.pop();
+
+    const reciverDeckIndex = room.playerDeck.findIndex((user:any)=> user.userId === userId)
+    
+    
+    const updateRoom = await RoomModel.findOneAndUpdate({roomId},{
+      $set: { currentUser: nextUser.userId },
+      $push: { [`playerDeck.${reciverDeckIndex}.deck`]: popCard },
+      $pop : {mainDeck : 1}
+    },
+    { new: true } // To return the updated document
+  )
+
+    io.to(nextUser.socketId).emit('saved-draw-card',{room:updateRoom});
+    io.to(currentUser.socketId).emit('saved-draw-card',{room:updateRoom});
+  });
+
+  socket.on('send-card',async(data:any)=>{
+    const {roomId,cardName,userId} = data;
+    const room = await RoomModel.findOne({ roomId });
+
+    if (!room) {
+      console.error("Room not found");
+      return;
+    }
+
+    const senderUser = room.users.find((user:any)=> user.userId === userId);
+    const receivingUser = room.users.find((user:any)=> user.userId!== userId);
+
+    let senderDeck = room.playerDeck.find((user:any)=> user.userId === userId).deck;
+    const CardReceived =  senderDeck.filter((card:string)=> card.charAt(1)===cardName.charAt(1));
+    senderDeck = senderDeck.filter((card:string)=> !CardReceived.includes(card));
+    
+    const senderDeckIndex = room.playerDeck.findIndex((user:any)=> user.userId === userId);
+    const receiverDeckIndex = room.playerDeck.findIndex((user:any)=> user.userId !== userId);
+ 
+    // let receiverDeck =  room.playerDeck.find((user:any)=>user.userId === receivingUser.userId).deck;
+    // receiverDeck.push(CardReceived);
+    // room.playerDeck.find((user:any)=> user.userId !== userId).deck = receiverDeck; 
+    // senderDeck = senderDeck.filter((card:string)=> !CardReceived.includes(card));
+    // room.playerDeck.find((user:any)=> user.userId === userId).deck = senderDeck;
+    // room.askUser = null;
+    // room.currentUser = receivingUser.userId;
+    
+    const updatedRoom = await RoomModel.findOneAndUpdate(
+      {roomId},
+      {
+        $set:{askUser :null,currentUser:receivingUser.userId,[`playerDeck.${senderDeckIndex}.deck`]:senderDeck},
+        $push:{[`playerDeck.${receiverDeckIndex}.deck`]:{ $each: CardReceived }},
+      },
+      {new : true}
+    )
+
+    room.users.forEach((user:any)=>{
+      io.to(user.socketId).emit('send-card',{room:updatedRoom});
+    })
+  });
+
+  socket.on('set',async(data:any)=>{
+    const {userId,checkDeck,roomId} = data;
+    
+    console.log(userId,checkDeck,roomId);
+
+    const room = await RoomModel.findOne({roomId});
+
+    if (!room) {
+      console.error("Room not found");
+      return;
+    }
+    const currentCount = room.set.findIndex((user:any)=> user.userId=== userId);
+    const playerDeckIndex = room.playerDeck.findIndex((user:any)=>user.userId=== userId);
+    const playerDeck = room.playerDeck[playerDeckIndex].deck.filter((card:string)=> !checkDeck.includes(card));
+
+    const updatedRoom = await RoomModel.findOneAndUpdate(
+      {roomId,"set.userId": userId},
+      {
+        $set:{[`playerDeck.${playerDeckIndex}.deck`]:playerDeck, 
+        },
+        $inc : {
+          "set.$.count": 1
+        }
+      },
+      {new : true}
+    )
+    
+    room.users.forEach((user:any)=>{
+      io.to(user.socketId).emit('set',{room:updatedRoom});
+    });
+  });
+
+  socket.on('end-game',async({roomId})=>{
+    const room = await RoomModel.findOne({roomId});
+
+    if (!room) {
+      console.error("Room not found");
+      return;
+    }
+
+    let maxCountUserId:string|null = null;
+    let max=0;
+
+    room.set.forEach((user:any)=>{
+      if(max<user.count){
+        max = user.count;
+        maxCountUserId = user.userId;
+      }
+    });
+
+    const winnerUser = room.users.find((user:any)=> user.userId === maxCountUserId);
+    const loserUser = room.users.find((user:any)=> user.userId !== maxCountUserId);
+    
+    io.to(winnerUser.socketId).emit('You-Won');
+    io.to(loserUser.socketId).emit('You-Lost');
+  })
+
+  // socket.on("gamePlay", async (data: GamePlayData) => {
+
+  //   const { cardName, roomId, userId } = data;
+  //   const currCard = cardName.toUpperCase();
+
+  //   // Retrieve the room and validate
+  //   const room = await RoomModel.findOne({ roomId });
+
+  //   if (!room) {
+  //     console.error("Room not found");
+  //     return;
+  //   }
+
+  //   //get the user based on userId
+  //   const user = room.users.find((users: userSchema) => users.userId === userId);
+
+
+  //   // if (playerNumber === selectPlayer) {
+  //   //   // Inform the client that the action is invalid
+  //   //   console.log("You cannot fish cards from your own deck");
+  //   //   socket.emit("actionAcknowledged", {
+  //   //     success: false,
+  //   //     message: "You cannot fish the cards from your own deck",
+  //   //   });
+  //   //   return; // Stop processing furtherroom
+  //   // }
+  //   // console.log("The player currently active is: ", playerNumber);
+
+  //   //A player cannot ask for a card if he doesnt have it
+  //   const currPlayer = room.playerDeck.find((player : any) => player.userId === userId);
+  //   const currPlayerDeck = currPlayer.deck;
+  //   console.log(currPlayerDeck);
+  //   if (!(currPlayerDeck.includes(currCard))) {
+  //     console.log("you cannot ask for cards which you dont have")
+  //   }
+
+  //   // Retrieve the selected player's deck
+  //   const selectPlayerDeck = room.playerDeck[selectPlayer - 1] as string[];
+  //   const count = selectPlayerDeck.filter((card) => card === currCard).length;
+
+  //   if (count === 0) {
+  //     // If the selected player doesn't have the card, use the main deck
+  //     if (room.mainDeck.length > 0) {
+  //       let cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
+
+  //       if (cardFromMainDeck !== currCard) {
+  //         selectPlayerDeck.push(cardFromMainDeck);
+  //         room.mainDeck.pop(); // Remove the card from the main deck
+  //         room.playerDeck[selectPlayer - 1] = selectPlayerDeck;
+
+  //         // Save the room state
+  //         await room.save();
+  //       } else {
+  //         while (cardFromMainDeck === currCard) {
+  //           selectPlayerDeck.push(cardFromMainDeck);
+  //           room.mainDeck.pop();
+
+  //           if (room.mainDeck.length > 0) {
+  //             cardFromMainDeck = room.mainDeck[room.mainDeck.length - 1];
+  //           } else {
+  //             socket.to(room).emit("Game ended wait for results");
+  //             break; // Exit the loop if no cards are left in the main deck
+  //           }
+  //         }
+
+  //         room.playerDeck[selectPlayer - 1] = selectPlayerDeck;
+
+  //         // Save the room state
+  //         await room.save();
+  //       }
+  //     } else {
+  //       // Handle the case where the main deck is empty
+  //       socket.to(room).emit("Game ended wait for results");
+  //       console.log("Main deck is empty, game logic for ending required.");
+  //     }
+  //   }
+  // });
+
 
   socket.on('offer', async (data: any) => {
     const { roomId, offer } = data;
     const room = await RoomModel.findOne({ roomId });
-    const user = room.users.find((userAgent:any)=> userAgent.socketId !== socket.id);
-    io.to(user.socketId).emit('offer',{offer,roomId});
+    const user = room.users.find((userAgent: any) => userAgent.socketId !== socket.id);
+    io.to(user.socketId).emit('offer', { offer, roomId });
   })
 
   socket.on('answer', async (data: any) => {
-    const { roomId, answer} = data;
+    const { roomId, answer } = data;
     const room = await RoomModel.findOne({ roomId });
     const currentSocketId = socket.id;
-    const user = room.users.find((userAgent:any)=>{
+    const user = room.users.find((userAgent: any) => {
       return userAgent.socketId !== currentSocketId;
     });
 
-    
-    io.to(user.socketId).emit("answer",{answer,roomId});
+
+    io.to(user.socketId).emit("answer", { answer, roomId });
   });
 
 

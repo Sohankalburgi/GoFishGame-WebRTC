@@ -1,13 +1,25 @@
 import { Schema, model } from "mongoose";
 import { User } from "../Manager/User";
 
-interface Room {
-    roomId : string,
-    users : User[],
-    playerDeck : any[],
+interface playerDeck {
+    userId : string;
+    deck : any[];
+}
+interface cardSet{
+    userId : string,
+    count: number,
+}
 
-    mainDeck : any[],
-    numberOfPlayers : number
+
+interface Room {
+    roomId : string;
+    users : User[];
+    playerDeck : playerDeck[];
+    mainDeck : any[];
+    numberOfPlayers : number;
+    set : cardSet[];
+    currentUser : string;
+    askUser : null | string;
 }
 
 const RoomSchema = new Schema<Room>({
@@ -27,8 +39,19 @@ const RoomSchema = new Schema<Room>({
     numberOfPlayers : {
         type : Number,
     },
+    set:{
+        type : [],
+    },
+    currentUser :{
+        type : String,
+    },
+    askUser :{
+        type : String,
+        default : null,
+    }
 });
 
 const RoomModel = model<Room>('Room',RoomSchema);
 
 module.exports = RoomModel;
+

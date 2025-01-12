@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { flushSync } from "react-dom";
 import Card from "./Card";
+import { checkSet } from "../functions/SetChecker";
 
 const URL = "http://localhost:3000";
 
@@ -221,10 +222,18 @@ const GameRoom = () => {
 
   const [roomCard, setRoomCard] = useState(null);
   const [startGame, setStartGame] = useState(false);
- 
+
+  const [askButton, setAskButton] = useState(false);
+  const [fishButton, setFishButton] = useState(false);
+  const [sendButton, setSendButton] = useState(false);
+  const [deckClick, setDeckClick] = useState(false);
+
+  const [activeIndex, setActiveIndex] = useState(null); // State to track the active card
+
+  const [cardNameAsked, setCardNameAsked] = useState("");
 
   const handleStartGame = async () => {
-    socket.emit("startGame", { roomId });
+    socket.emit("startGame", { roomId, userId });
   };
 
   useEffect(() => {
@@ -232,68 +241,268 @@ const GameRoom = () => {
       socket.on("StartState", ({ room }) => {
         console.log("the room ", room);
         setRoomCard(room);
+        setStartGame(true);
       });
-    }
-  }, [socket]); // Listen to changes in the socket object.
-  
 
-  const [activeIndex, setActiveIndex] = useState(null); // State to track the active card
+      socket.on("card-present", ({ room, cardName }) => {
+        console.log("card-present");
+        setRoomCard(room);
+        setSendButton(false);
+        setFishButton(true);
+        setCardNameAsked(cardName);
+      });
+
+      socket.on("card-not-present", ({ room, cardName }) => {
+        console.log("card-not-present");
+        setRoomCard(room);
+        setFishButton(false);
+        setSendButton(true);
+        setCardNameAsked(cardName);
+      });
+
+      socket.on("fish", ({ room, cardName }) => {
+        console.log("fish is receiveed");
+        setDeckClick(true);
+      });
+
+      socket.on("saved-draw-card", ({ room }) => {
+        setRoomCard(room);
+        setAskButton(false);
+      });
+
+      socket.on("send-card", async ({ room }) => {
+        setRoomCard(room);
+        setAskButton(false);
+      });
+      socket.on("set", async ({ room }) => {
+        setRoomCard(room);
+      });
+
+      socket.on('You-Won',()=>{
+        alert("you won the Game!!!");
+      })
+      socket.on('You-Lost',()=>{
+        alert("you lost the Game !!!")
+      })
+    }
+  }, [
+    socket,
+    fishButton,
+    sendButton,
+    askButton,
+    cardNameAsked,
+    deckClick,
+    roomCard,
+  ]); // Listen to changes in the socket object.
+
+  useEffect(() => {
+    if (roomCard) {
+      const deck = roomCard.playerDeck.find((user) => user.userId === userId);
+      const checkDeck = checkSet(deck.deck);
+      if (checkDeck.length == 0) {
+        console.log("there is no set");
+      } else {
+        console.log("there is set");
+        socket.emit("set", { userId, checkDeck, roomId });
+      }
+      if(roomCard.mainDeck===0){
+        console.log("game ended");
+        socket.emit('end-game',{roomId});
+      }
+    }
+  }, [roomCard, setRoomCard]);
 
   const handleCardClick = (index) => {
     setActiveIndex(index === activeIndex ? null : index); // Toggle active card
   };
 
+  const handleAsk = async () => {
+    const cardName = roomCard.playerDeck.find((user) => user.userId === userId)
+      .deck[activeIndex];
+    console.log(cardName);
+    setAskButton(true);
+    socket.emit("ask", { roomId, cardName, userId });
+  };
+
+  const handleFish = async () => {
+    setFishButton(true);
+    const cardName = cardNameAsked;
+    socket.emit("fish", { roomId, cardName, userId });
+  };
+
+  const handleSend = async () => {
+    setSendButton(false);
+    const cardName = cardNameAsked;
+    socket.emit("send-card", { roomId, cardName, userId });
+  };
+
+  const handleDrawCard = async () => {
+    setDeckClick(false);
+    socket.emit("save-draw-card", { roomId, userId });
+  };
+
   return (
-    <div className="w-full">
-      <div className="mx-2 mt-2 flex gap-2 flex-col w-1/4">
-        <h3>Local User</h3>
+    <div className="w-full h-screen flex flex-row">
+      {/* Left Section: Video Streams */}
+      <div className="w-1/4 mx-2 mt-2 flex flex-col gap-4">
+        <h3 className="text-center">Local User</h3>
         <video
           ref={localVideoRef}
           className="border border-black rounded-md"
-          autoPlay={true}
+          autoPlay
           width={400}
         ></video>
-        <h3>Remote User</h3>
+        <h3 className="text-center">Remote User</h3>
         <video
           ref={remoteVideoRef}
           className="border border-black rounded-md"
-          autoPlay={true}
+          autoPlay
           width={400}
         ></video>
         <button
-          className="p-2 bg-red-500  text-white rounded rounded-md"
-          onClick={() => handleStartGame()}
+          className="p-2 bg-red-500 text-white rounded-md disabled:bg-red-100"
+          onClick={handleStartGame}
+          disabled={startGame ? true : false}
         >
-          StartGame
+          Start Game
         </button>
       </div>
-      <div className="w-3/4">
-        <div className="flex  items-center p-8 bg-green-500 ">
+
+      {/* Right Section: Game Card Area */}
+      <div className="w-3/4 flex flex-col items-center gap-[6.5rem]  p-4 bg-green-500 relative">
+        {/* Player 1 Deck */}
+        <div
+          className={`flex items-center justify-center p-4 bg-green-500 mt-5 rounded-md ${
+            roomCard && roomCard.currentUser === userId
+              ? "opacity-50 pointer-events-none"
+              : ""
+          }`}
+        >
           <div className="flex relative">
-            {roomCard && roomCard.playerDeck[0].map((type, index) => (
-              <Card
-                type={type}
-                index={index}
-                total={roomCard.playerDeck[0].length}
-                key={index}
-                isActive={activeIndex === index} // Active card styling
-                onClick={handleCardClick} // Corrected to onClick
-              />
-            ))}
+            {roomCard &&
+              roomCard.playerDeck
+                .find((user) => user.userId !== userId)
+                .deck.map((type, index) => (
+                  <Card
+                    type={type}
+                    index={index}
+                    total={
+                      roomCard.playerDeck.find((user) => user.userId === userId)
+                        .deck.length
+                    }
+                    key={index}
+                  />
+                ))}
           </div>
         </div>
-        <div className="flex  items-center p-8 bg-green-500 ">
+
+        {/* Central Pile (Question Mark Card) */}
+        <div className="flex justify-center items-center">
+          <div
+            className={` w-24 h-32 bg-white  rounded-xl shadow-lg 
+            flex flex-col justify-center items-center 
+            overflow-hidden transform transition-all duration-300 
+            hover:w-28 hover:h-36 hover:p-4 hover:z-10 hover:rotate-0`}
+          >
+            <div>
+              {/* Card Content */}
+              <div className="text-center ">
+                <h2 className="text-sm sm:text-sm md:text-sm text-blue-950 font-bold">
+                  Your - Set Count {roomCard && roomCard.set.find((user)=> user.userId==userId).count}
+                </h2>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => handleDrawCard()}
+            className={`disabled:bg-slate-800 w-24 h-32 bg-white  rounded-xl shadow-lg 
+            flex flex-col justify-center items-center 
+            overflow-hidden transform transition-all duration-300 
+            hover:w-28 hover:h-36 hover:p-4 hover:z-10 hover:rotate-0`}
+            disabled={deckClick === true ? false : true}
+          >
+            <div>
+              {/* Card Content */}
+              <div className="text-center ">
+                <h2 className="text-7xl sm:text-7xl md:text-7xl text-blue-950 font-bold">
+                  ?
+                </h2>
+              </div>
+            </div>
+          </button>
+
+          <div
+            className={` w-24 h-32 bg-white  rounded-xl shadow-lg 
+            flex flex-col justify-center items-center 
+            overflow-hidden transform transition-all duration-300 
+            hover:w-28 hover:h-36 hover:p-4 hover:z-10 hover:rotate-0`}
+          >
+            <div>
+              {/* Card Content */}
+              <div className="text-center ">
+                <h2 className="text-sm sm:text-sm md:text-sm text-blue-950 font-bold">
+                  Opponent - Set Count {roomCard && roomCard.set.find((user)=> user.userId!=userId).count}
+                </h2>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 absolute right-10">
+            {roomCard && roomCard.currentUser === userId ? (
+              <button
+                disabled={askButton}
+                className="bg-orange-400 p-6 disabled:bg-blue-950 rounded-full text-white font-bold shadow-2xl shadow-orange-500 hover:scale-110 transition-all"
+                onClick={() => handleAsk()}
+              >
+                Ask
+              </button>
+            ) : roomCard && roomCard.askUser ? (
+              <>
+                <button
+                  disabled={fishButton}
+                  onClick={() => handleFish()}
+                  className="bg-orange-400 p-6 disabled:bg-blue-950 rounded-full text-white font-bold shadow-2xl shadow-orange-500 hover:scale-110 transition-all"
+                >
+                  Go Fish !!!
+                </button>
+                <button
+                  disabled={sendButton}
+                  onClick={() => handleSend()}
+                  className="bg-orange-400 p-6 rounded-full disabled:bg-blue-950 text-white font-bold shadow-2xl shadow-orange-500 hover:scale-110 transition-all"
+                >
+                  Send Card
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Player 2 Deck */}
+        <div
+          className={`flex flex-row gap-10 items-center justify-center p-4 bg-green-500 rounded-md ${
+            roomCard && roomCard.currentUser !== userId
+              ? "opacity-50 pointer-events-none"
+              : ""
+          }`}
+        >
           <div className="flex relative">
-            {roomCard && roomCard.playerDeck[1].map((type, index) => (
-              <Card
-                type={type}
-                index={index}
-                total={roomCard.playerDeck[1].length}
-                key={index}
-                isActive={activeIndex === index} // Active card styling
-                onClick={handleCardClick} // Corrected to onClick
-              />
-            ))}
+            {roomCard &&
+              roomCard.playerDeck
+                .find((user) => user.userId === userId)
+                .deck.map((type, index) => (
+                  <Card
+                    type={type}
+                    index={index}
+                    total={
+                      roomCard.playerDeck.find((user) => user.userId === userId)
+                        .deck.length
+                    }
+                    key={index}
+                    isActive={activeIndex === index}
+                    onClick={() => handleCardClick(index)} // Fixed click handler
+                  />
+                ))}
           </div>
         </div>
       </div>
