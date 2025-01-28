@@ -398,6 +398,7 @@ io.on('connection', (socket) => {
         }));
     }));
 });
-server.listen(3000, () => {
+const HOST = "0.0.0.0";
+server.listen(3000, HOST, () => {
     console.log('server running at http://localhost:3000');
 });

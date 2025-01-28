@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const Card = ({ type, index, total, isActive, onClick }) => {
+const Card = ({isShow, type, index, total, isActive, onClick }) => {
   const suitIcons = {
     S: '♠', // Spades
     C: '♣', // Clubs
@@ -33,8 +33,8 @@ const Card = ({ type, index, total, isActive, onClick }) => {
     >
       {/* Card Content */}
       <div className="text-center">
-        <span className="text-sm sm:text-lg md:text-xl">{suitIcons[suit]}</span>
-        <h2 className="text-xs sm:text-sm md:text-lg font-bold">{value}</h2>
+        <span className="text-sm sm:text-lg md:text-xl">{isShow? suitIcons[suit]: ""}</span>
+        <h2 className="text-xs sm:text-sm md:text-lg font-bold">{isShow? value: "?"}</h2>
       </div>
     </div>
   );

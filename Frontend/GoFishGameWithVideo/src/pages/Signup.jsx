@@ -41,7 +41,7 @@ export const SignUp = () => {
 
     return (
         <div id="webcrumbs">
-            <div className="w-full h-[900px] bg-black text-primary-50 rounded-lg flex justify-center items-center"
+            <div className="w-full h-screen bg-black text-primary-50 rounded-lg flex justify-center items-center"
                 style={{
                     background: "linear-gradient(135deg, #2F2C59, #F0209B)",
                 }}

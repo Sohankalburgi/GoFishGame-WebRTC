@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 import { flushSync } from "react-dom";
 import Card from "./Card";
 import { checkSet } from "../functions/SetChecker";
+import toast from "react-hot-toast";
 
 const URL = "http://localhost:3000";
 
@@ -278,12 +279,12 @@ const GameRoom = () => {
         setRoomCard(room);
       });
 
-      socket.on('You-Won',()=>{
-        alert("you won the Game!!!");
-      })
-      socket.on('You-Lost',()=>{
-        alert("you lost the Game !!!")
-      })
+      socket.on("You-Won", () => {
+        alert("You won the Game !!!")
+      });
+      socket.on("You-Lost", () => {
+        alert("you lost the Game !!!");
+      });
     }
   }, [
     socket,
@@ -305,9 +306,14 @@ const GameRoom = () => {
         console.log("there is set");
         socket.emit("set", { userId, checkDeck, roomId });
       }
-      if(roomCard.mainDeck===0){
+      if (roomCard.mainDeck.length === 0) {
         console.log("game ended");
-        socket.emit('end-game',{roomId});
+        socket.emit("end-game", { roomId });
+      }
+      if (deck.deck.length === 0) {
+        console.log("draw the card from pile");
+        setDeckClick(false);
+        socket.emit("save-draw-card", { roomId, userId });
       }
     }
   }, [roomCard, setRoomCard]);
@@ -319,7 +325,10 @@ const GameRoom = () => {
   const handleAsk = async () => {
     const cardName = roomCard.playerDeck.find((user) => user.userId === userId)
       .deck[activeIndex];
-    console.log(cardName);
+    if (!cardName) {
+      toast.error("Please Select a Card");
+      return;
+    }
     setAskButton(true);
     socket.emit("ask", { roomId, cardName, userId });
   };
@@ -341,6 +350,18 @@ const GameRoom = () => {
     socket.emit("save-draw-card", { roomId, userId });
   };
 
+
+  const [copied, setCopied] = useState(false);
+  const textToCopy = roomId;
+
+  const handleCopy = () => {
+
+    toast.success('Room ID Copied to Clipboard');
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+
   return (
     <div className="w-full h-screen flex flex-row">
       {/* Left Section: Video Streams */}
@@ -359,6 +380,15 @@ const GameRoom = () => {
           autoPlay
           width={400}
         ></video>
+        <button>
+
+        </button>
+        <div>
+
+          <button onClick={handleCopy} className={`bg-slate-200 p-1 px-3 w-full rounded-xl ${copied ? 'bg-yellow-300' : ""}`}>
+            Share the Room ID :  {roomId}
+          </button>
+        </div>
         <button
           className="p-2 bg-red-500 text-white rounded-md disabled:bg-red-100"
           onClick={handleStartGame}
@@ -372,11 +402,10 @@ const GameRoom = () => {
       <div className="w-3/4 flex flex-col items-center gap-[6.5rem]  p-4 bg-green-500 relative">
         {/* Player 1 Deck */}
         <div
-          className={`flex items-center justify-center p-4 bg-green-500 mt-5 rounded-md ${
-            roomCard && roomCard.currentUser === userId
-              ? "opacity-50 pointer-events-none"
-              : ""
-          }`}
+          className={`flex items-center justify-center p-4 bg-green-500 mt-5 rounded-md ${roomCard && roomCard.currentUser === userId
+            ? "opacity-50 pointer-events-none"
+            : ""
+            }`}
         >
           <div className="flex relative">
             {roomCard &&
@@ -384,6 +413,7 @@ const GameRoom = () => {
                 .find((user) => user.userId !== userId)
                 .deck.map((type, index) => (
                   <Card
+                    isShow={false}
                     type={type}
                     index={index}
                     total={
@@ -399,16 +429,18 @@ const GameRoom = () => {
         {/* Central Pile (Question Mark Card) */}
         <div className="flex justify-center items-center">
           <div
-            className={` w-24 h-32 bg-white  rounded-xl shadow-lg 
+            className={` w-24 h-32 bg-white mx-10 rounded-xl shadow-lg 
             flex flex-col justify-center items-center 
             overflow-hidden transform transition-all duration-300 
-            hover:w-28 hover:h-36 hover:p-4 hover:z-10 hover:rotate-0`}
+            hover:w-28 hover:h-36    hover:p-4 hover:z-10 hover:rotate-0`}
           >
             <div>
               {/* Card Content */}
               <div className="text-center ">
                 <h2 className="text-sm sm:text-sm md:text-sm text-blue-950 font-bold">
-                  Your - Set Count {roomCard && roomCard.set.find((user)=> user.userId==userId).count}
+                  Your - Set Count{" "}
+                  {roomCard &&
+                    roomCard.set.find((user) => user.userId == userId).count}
                 </h2>
               </div>
             </div>
@@ -436,13 +468,15 @@ const GameRoom = () => {
             className={` w-24 h-32 bg-white  rounded-xl shadow-lg 
             flex flex-col justify-center items-center 
             overflow-hidden transform transition-all duration-300 
-            hover:w-28 hover:h-36 hover:p-4 hover:z-10 hover:rotate-0`}
+            hover:w-28 hover:h-36 hover:p-4 mx-10 hover:z-10 hover:rotate-0`}
           >
             <div>
               {/* Card Content */}
               <div className="text-center ">
                 <h2 className="text-sm sm:text-sm md:text-sm text-blue-950 font-bold">
-                  Opponent - Set Count {roomCard && roomCard.set.find((user)=> user.userId!=userId).count}
+                  Opponent - Set Count{" "}
+                  {roomCard &&
+                    roomCard.set.find((user) => user.userId != userId).count}
                 </h2>
               </div>
             </div>
@@ -480,11 +514,10 @@ const GameRoom = () => {
 
         {/* Player 2 Deck */}
         <div
-          className={`flex flex-row gap-10 items-center justify-center p-4 bg-green-500 rounded-md ${
-            roomCard && roomCard.currentUser !== userId
-              ? "opacity-50 pointer-events-none"
-              : ""
-          }`}
+          className={`flex flex-row gap-10 items-center justify-center p-4 bg-green-500 rounded-md ${roomCard && roomCard.currentUser !== userId
+            ? "opacity-50 pointer-events-none"
+            : ""
+            }`}
         >
           <div className="flex relative">
             {roomCard &&
@@ -492,6 +525,7 @@ const GameRoom = () => {
                 .find((user) => user.userId === userId)
                 .deck.map((type, index) => (
                   <Card
+                    isShow={true}
                     type={type}
                     index={index}
                     total={

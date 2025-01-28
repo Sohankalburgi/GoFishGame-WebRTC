@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import toast, { Toaster } from 'react-hot-toast';
 import "../Components/Login.css";
 import { useNavigate, useParams } from "react-router";
@@ -56,7 +56,7 @@ export const JoinGame = () => {
                 <Toaster/>
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <div className="w-[400px] h-auto bg-[#1c1b3a] rounded-lg p-6 flex flex-col items-center">
-                        <h1 className="font-title text-2xl mb-4">CREATE THE ROOM</h1>
+                        <h1 className="font-title text-2xl mb-4">JOIN THE ROOM</h1>
                         <div className="w-full space-y-3.5">
                             <div className="flex flex-col">
                                 <label htmlFor="roomId" className="text-sm pb-1">

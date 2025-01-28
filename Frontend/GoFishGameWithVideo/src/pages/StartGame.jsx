@@ -13,9 +13,9 @@ export const StartGame = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const id = localStorage.getItem('token');
+        const id = localStorage.getItem('authToken');
         setUserId(id);
-    },[]);
+    }, []);
 
     const {
         register,
@@ -25,28 +25,28 @@ export const StartGame = () => {
     const onSubmit = async (data) => {
         const formData = { ...data, userId: userId }
         console.log(formData);
-        try{
-        const response = await fetch("http://localhost:3000/startGame", {  
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(formData)
-        });
-        const result = await response.json();
-        console.log(result);
-        if(result.success === true){
-            toast.success(result.message);
-            setRoomId(result.message);
+        try {
+            const response = await fetch("http://localhost:3000/startGame", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(formData)
+            });
+            const result = await response.json();
+            console.log(result);
+            if (result.success === true) {
+                toast.success(result.message);
+                setRoomId(result.message);
+            }
+            else if (result.success === false) {
+                toast.error(result.message);
+            }
         }
-        else if(result.success === false){
-            toast.error(result.message);
+        catch (err) {
+            console.log(err);
+            toast.error('Something error occured');
         }
-    }
-    catch(err){
-        console.log(err);
-        toast.error('Something error occured');
-    }
 
     };
     return (
@@ -55,7 +55,7 @@ export const StartGame = () => {
                 className="w-full h-[900px] bg-black text-primary-50 rounded-lg flex justify-center items-center"
                 style={{ background: "linear-gradient(135deg, #2F2C59, #F0209B)" }}
             >
-                <Toaster/>
+                <Toaster />
                 <div className="w-[400px] h-auto bg-[#1c1b3a] rounded-lg p-6 flex flex-col ">
                     <h1 className="font-title text-2xl mb-4">CREATE THE ROOM</h1>
                     <form onSubmit={handleSubmit(onSubmit)}>
@@ -64,15 +64,11 @@ export const StartGame = () => {
                                 <label htmlFor="players" className="text-sm pb-1">
                                     ENTER NUMBER OF PLAYERS
                                 </label>
-                                <select
-                                    id="players"
+                                <input type="text" id="players" value={2} disabled={true}
                                     {...register("numberOfPlayers")}
-                                    className="p-2 text-center bg-[#2f2f45] text-primary-50 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-900"
+                                    className="p-2 text-center disabled:bg-[#717180] bg-[#2f2f45] text-primary-50 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-900"
                                 >
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                    <option value="4">4</option>
-                                </select>
+                                </input>
                             </div>
 
                             <div className="flex flex-col mt-2">
@@ -89,7 +85,7 @@ export const StartGame = () => {
                                     className="p-2 text-center bg-[#2f2f45] text-primary-50 rounded-md focus:outline-none"
                                 />
                             </div>
-                            {roomId.length===0 && (<button
+                            {roomId.length === 0 && (<button
                                 className="w-full mt-4 p-2 rounded-md text-center text-primary-50"
                                 style={{
                                     background: "linear-gradient(135deg, #C13530, #8e44ad)",
@@ -97,17 +93,17 @@ export const StartGame = () => {
                             >
                                 CREATE THE ROOM
                             </button>)}
-                            
+
                         </div>
                     </form>
-                    {roomId.length>0 && (<div className="w-full mt-4 p-2 rounded-md text-center text-primary-50"
-                                style={{
-                                    background: "linear-gradient(135deg, #C13530, #8e44ad)",
-                                }}
-                                onClick={()=>{navigate(`/game/${roomId}`)}}
-                                >
-                                ROOM ID: {roomId}
-                        </div>)}
+                    {roomId.length > 0 && (<div className="w-full mt-4 p-2 rounded-md text-center text-primary-50"
+                        style={{
+                            background: "linear-gradient(135deg, #C13530, #8e44ad)",
+                        }}
+                        onClick={() => { navigate(`/gameroom/${roomId}/${userId}`) }}
+                    >
+                        ROOM ID: {roomId}
+                    </div>)}
                 </div>
             </div>
         </div>

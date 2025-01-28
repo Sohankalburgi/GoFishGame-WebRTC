@@ -3,6 +3,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import '../Components/Login.css'
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
+import { useAuth } from '../contextProvider/authProvider';
 
 export const Login = () => {
 
@@ -13,7 +14,7 @@ export const Login = () => {
     } = useForm()
 
     const navigate =  useNavigate();
-
+    const { login } = useAuth();
 
     const onSubmit = async (data) => {
         console.log(data)
@@ -29,6 +30,7 @@ export const Login = () => {
             console.log(result);
             if (result.success == true) {
                 toast.success(result.message);
+                login(result.token);
                 navigate(`/joingame/${result.token}`)
             }
             else if (result.success === false) {
@@ -42,7 +44,7 @@ export const Login = () => {
     }
         return (
             <div id="webcrumbs">
-                <div className="w-full h-[900px] bg-black text-primary-50 rounded-lg flex justify-center items-center"
+                <div className="w-full h-screen bg-black text-primary-50 rounded-lg flex justify-center items-center"
                     style={{
                         background: "linear-gradient(135deg, #2F2C59, #F0209B)",
                     }}
@@ -80,9 +82,9 @@ export const Login = () => {
                                     {errors.password && <span className="text-yellow-300">{errors.password.message}</span>}
                                 </div>
                                 <div className="text-right mt-0.5">
-                                    <a href="#" className="text-xs text-primary-300 hover:underline">
+                                    {/* <a href="#" className="text-xs text-primary-300 hover:underline">
                                         Forgot password?
-                                    </a>
+                                    </a> */}
                                 </div>
                                 <button
                                     className="w-full mt-4 p-2 rounded-md text-center text-primary-50"
